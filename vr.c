@@ -41,14 +41,14 @@ static void (*p_thermal_client_config_cleanup)(struct config_instance *, unsigne
 static int max_string_size = 36;
 static int error_state = 0; //global error state - don't do anything if set!
 
-#define DEBUG 1
+#define DEBUG 0
 
 static thermal_cfg_info_t non_vr_thermal_cfgs;
 static thermal_cfg_info_t vr_thermal_cfgs;
 
 int __attribute__ ((weak)) load_thermal_cfg_info(thermal_cfg_info_t *non_vr,
                                                  thermal_cfg_info_t *vr) {
-
+    ALOGD("Entering %s",__func__);
     non_vr->num_cfgs = 0;
     vr->num_cfgs = 0;
 
@@ -84,6 +84,7 @@ static void log_config_instance(struct config_instance *instance ){
  * Debug function for printing out all instances of "ss" and "monitor" algos
  */
 static void query_thermal_config(){
+    ALOGD("Entering %s",__func__);
     struct config_instance *instances;
 
     int num_configs = (*p_thermal_client_config_query)("ss", &instances);
@@ -113,8 +114,8 @@ static void query_thermal_config(){
  * Load the thermal client library
  * returns 0 on success
  */
-static int load_thermal_client(void)
-{
+static int load_thermal_client(void){
+    ALOGD("Entering %s",__func__);
     char *thermal_client_so = "vendor/lib64/libthermalclient.so";
 
     dlhandle = dlopen(thermal_client_so, RTLD_NOW | RTLD_LOCAL);
@@ -157,39 +158,74 @@ error_handle:
 }
 
 /**
- *  Allocate a new struct config_instance for modifying the disable field
- */
-static struct config_instance *allocate_config_instance(){
-    struct config_instance *config = (struct config_instance *)malloc(sizeof(struct config_instance));
-    memset(config, 0, sizeof(*config));
-
-    config->cfg_desc = (char *)malloc(sizeof(char) * max_string_size);
-    memset(config->cfg_desc, 0, sizeof(char)*max_string_size);
-
-    config->algo_type = (char *)malloc(sizeof(char) * max_string_size);
-    memset(config->algo_type, 0, sizeof(char) * max_string_size);
-
-    config->fields = (struct field_data *)malloc(sizeof(struct field_data));
-    memset(config->fields, 0, sizeof(*config->fields));
-
-    config->fields[0].field_name = (char*)malloc(sizeof(char) * max_string_size);
-    memset(config->fields[0].field_name, 0, sizeof(char) * max_string_size);
-
-    config->fields[0].data = (void*)malloc(sizeof(int));
-
-    return config;
-}
-/**
  *  Free the config_instance as allocated in allocate_config_instance
  */
 static void free_config_instance(struct config_instance *config){
 
-    free(config->fields[0].data);
-    free(config->fields[0].field_name);
-    free(config->fields);
-    free(config->algo_type);
-    free(config->cfg_desc);
-    free(config);
+    if (config) {
+        if (config->fields) {
+            free(config->fields[0].data);
+            free(config->fields[0].field_name);
+            free(config->fields);
+        }
+        free(config->algo_type);
+        free(config->cfg_desc);
+        free(config);
+    }
+}
+
+/**
+ *  Allocate a new struct config_instance for modifying the disable field
+ */
+static struct config_instance *allocate_config_instance(){
+    ALOGD("Entering %s",__func__);
+    struct config_instance *config = (struct config_instance *)malloc(sizeof(struct config_instance));
+    if (!config) {
+        ALOGE("Unable to allocate memory for config");
+        return NULL;
+    }
+    memset(config, 0, sizeof(*config));
+
+    config->cfg_desc = (char *)malloc(sizeof(char) * max_string_size);
+    if (!config->cfg_desc) {
+        free_config_instance(config);
+        ALOGE("Unable to allocate memory for config->cfg_desc");
+        return NULL;
+    }
+    memset(config->cfg_desc, 0, sizeof(char)*max_string_size);
+
+    config->algo_type = (char *)malloc(sizeof(char) * max_string_size);
+    if (!config->algo_type) {
+        free_config_instance(config);
+        ALOGE("Unable to allocate memory for config->algo_type");
+        return NULL;
+    }
+    memset(config->algo_type, 0, sizeof(char) * max_string_size);
+
+    config->fields = (struct field_data *)malloc(sizeof(struct field_data));
+    if (!config->fields) {
+        free_config_instance(config);
+        ALOGE("Unable to allocate memory for config->fields");
+        return NULL;
+    }
+    memset(config->fields, 0, sizeof(*config->fields));
+
+    config->fields[0].field_name = (char*)malloc(sizeof(char) * max_string_size);
+    if (!config->fields[0].field_name) {
+        free_config_instance(config);
+        ALOGE("Unable to allocate memory for config->fields[0].field_name");
+        return NULL;
+    }
+    memset(config->fields[0].field_name, 0, sizeof(char) * max_string_size);
+
+    config->fields[0].data = (void*)malloc(sizeof(int));
+    if (!config->fields[0].data) {
+        free_config_instance(config);
+        ALOGE("Unable to allocate memory for config->fields[0].data");
+        return NULL;
+    }
+
+    return config;
 }
 
 /**
@@ -197,11 +233,15 @@ static void free_config_instance(struct config_instance *config){
  *  returns 1 on success, anything else is a failure
  */
 static int disable_config(char *config_name, char *algo_type){
+    ALOGD("Entering %s",__func__);
     int result = 0;
     if (error_state) {
         return 0;
     }
     struct config_instance *config = allocate_config_instance();
+    if (!config) {
+        return 0;
+    }
     strlcpy(config->cfg_desc, config_name, max_string_size);
     strlcpy(config->algo_type, algo_type, max_string_size);
     strlcpy(config->fields[0].field_name, "disable", max_string_size);
@@ -227,11 +267,15 @@ static int disable_config(char *config_name, char *algo_type){
  *  returns 1 on success, anything else is failure
  */
 static int enable_config(char *config_name, char *algo_type){
+    ALOGD("Entering %s",__func__);
     int result = 0;
     if (error_state) {
         return 0;
     }
     struct config_instance *config = allocate_config_instance();
+    if (!config) {
+        return 0;
+    }
     strlcpy(config->cfg_desc, config_name, max_string_size);
     strlcpy(config->algo_type, algo_type, max_string_size);
     strlcpy(config->fields[0].field_name, "disable", max_string_size);
@@ -258,6 +302,7 @@ static int enable_config(char *config_name, char *algo_type){
  * Attempts to clean up any outstanding thermal config state
  */
 static void error_cleanup(){
+    ALOGD("Entering %s",__func__);
     //disable VR configs, best-effort so ignore return values
     for (unsigned int i = 0; i < vr_thermal_cfgs.num_cfgs; i++) {
         disable_config(vr_thermal_cfgs.cfgs[i].config_name, vr_thermal_cfgs.cfgs[i].algo_name);
@@ -276,6 +321,7 @@ static void error_cleanup(){
  * Set global display/GPU/scheduler configuration to used for VR apps.
  */
 static void set_vr_thermal_configuration() {
+    ALOGD("Entering %s",__func__);
     int result = 1;
     if (error_state) {
         return;
@@ -313,6 +359,7 @@ error:
  * Reset to default global display/GPU/scheduler configuration.
  */
 static void unset_vr_thermal_configuration() {
+    ALOGD("Entering %s",__func__);
     int result = 1;
     if (error_state) {
         return;
@@ -345,8 +392,8 @@ error:
     return;
 }
 
-static void vr_init(struct vr_module *module) 
-{
+static void vr_init(struct vr_module *module){
+    ALOGD("Entering %s",__func__);
     int success = load_thermal_client();
     if (success != 0) {
         ALOGE("failed to load thermal client");
@@ -360,8 +407,8 @@ static void vr_init(struct vr_module *module)
 
 }
 
-static void vr_set_vr_mode(struct vr_module *module, bool enabled) 
-{
+static void vr_set_vr_mode(struct vr_module *module, bool enabled){
+    ALOGD("Entering %s",__func__);
     if (enabled) {
         set_vr_thermal_configuration();
     } else {
